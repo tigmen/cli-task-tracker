@@ -41,6 +41,7 @@ func (c Command_add) Execute(context Context) (string, error) {
 	id, err := c.storage.Add(Task{Desctiption: c.description, Status: TODO,
 		CreatedAt: time.Now().Unix(), UpdatedAt: time.Now().Unix()})
 	if err != nil {
+		return "", fmt.Errorf("Failed Command_add: %w", err)
 	}
 
 	return fmt.Sprintf("Task added successfully (ID: %d)", id), err
