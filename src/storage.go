@@ -1,14 +1,19 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"log"
 	"os"
+	"time"
 )
 
 type Storage interface {
 	Add(task Task) (uint, error)
-	Update(id uint, task Task) (Task, error)
+	Update(id uint, task Task) (uint, error)
 	Delete(id uint) (uint, error)
 	Get(id uint) (Task, error)
+	GetAll() ([]Task, error)
 }
 
 type FileStorage struct {
@@ -16,22 +21,184 @@ type FileStorage struct {
 }
 
 func (fs FileStorage) Add(task Task) (uint, error) {
-	file, err := os.OpenFile(fs.path, os.O_RDWR, 0666)
+	file, err := os.OpenFile(fs.path, os.O_CREATE|os.O_RDWR, os.ModePerm)
 	if err != nil {
+		return 0, fmt.Errorf("Failed to open storage-file: %w", err)
 	}
-	defer file.Close()
 
-	return 0, nil
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			log.Fatal("Failed to close storage-file: ", err)
+		}
+	}()
+
+	scanner := bufio.NewScanner(file)
+	var id uint
+
+	for scanner.Scan() {
+		_, err = fmt.Sscan(scanner.Text(), &id)
+		if err != nil {
+			return 0, fmt.Errorf("Error getting id from scanner.Text(): %w", err)
+		}
+	}
+
+	if err = scanner.Err(); err != nil {
+		return 0, fmt.Errorf("Scanner error: %w", err)
+	}
+
+	if task.Desctiption == "" {
+		task.Desctiption = "(null)"
+	}
+
+	if task.CreatedAt == 0 {
+		task.CreatedAt = time.Now().Unix()
+	}
+
+	if task.UpdatedAt == 0 {
+		task.UpdatedAt = time.Now().Unix()
+	}
+
+	if task.Id != 0 {
+		id = task.Id
+	}
+	id++
+
+	_, err = fmt.Fprintf(file, "%d %s %d %d %d\n", id, task.Desctiption, task.Status, task.CreatedAt, task.UpdatedAt)
+	if err != nil {
+		return 0, fmt.Errorf("Error writing new task: %w", err)
+	}
+
+	return id, nil
 }
 
-func (fs FileStorage) Update(id uint, task Task) (Task, error) {
-	return Task{}, nil
+func (fs FileStorage) rewrite(tasks []Task) error {
+	file, err := os.OpenFile(fs.path, os.O_WRONLY, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("Failed to open storage-file: %w", err)
+	}
+
+	defer func() {
+		if err != nil {
+			log.Fatal("Failed to close storage-file: ", err)
+		}
+	}()
+
+	writer := bufio.NewWriter(file)
+
+	for _, val := range tasks {
+		writer.WriteString(fmt.Sprintf("%d %s %d %d %d\n", val.Id, val.Desctiption, val.Status,
+			val.CreatedAt, val.UpdatedAt))
+	}
+
+	err = writer.Flush()
+	if err != nil {
+		return fmt.Errorf("Failed write to storage-file: %w", err)
+	}
+
+	return nil
+}
+
+func (fs FileStorage) Update(id uint, task Task) (uint, error) {
+	tasks, err := fs.GetAll()
+	if err != nil {
+		return 0, err
+	}
+
+	exist := false
+
+	for i := 0; i < len(tasks); i++ {
+		if tasks[i].Id == id {
+			tasks[i].Id = id
+			if task.Desctiption != "" {
+				tasks[i].Desctiption = task.Desctiption
+			}
+			tasks[i].Status = task.Status
+			tasks[i].UpdatedAt = time.Now().Unix()
+			exist = true
+		}
+	}
+
+	if exist {
+		err = fs.rewrite(tasks)
+		if err != nil {
+			return 0, err
+		}
+
+		return id, nil
+	}
+
+	id, err = fs.Add(task)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
 func (fs FileStorage) Delete(id uint) (uint, error) {
-	return 0, nil
+	tasks, err := fs.GetAll()
+	if err != nil {
+		return 0, err
+	}
+
+	for i := 0; i < len(tasks); i++ {
+		if tasks[i].Id == id {
+			continue
+		}
+	}
+
+	err = fs.rewrite(tasks)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+func (fs FileStorage) GetAll() ([]Task, error) {
+	file, err := os.OpenFile(fs.path, os.O_CREATE|os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to open storage-file: %w", err)
+	}
+
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			log.Fatal("Failed to close storage-file: ", err)
+		}
+	}()
+
+	scanner := bufio.NewScanner(file)
+	tasks := make([]Task, 0)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		tmp := Task{}
+		fmt.Sscanf(line, "%d %s %d %d %d", &tmp.Id, &tmp.Desctiption, &tmp.Status,
+			&tmp.CreatedAt, &tmp.UpdatedAt)
+
+		tasks = append(tasks, tmp)
+	}
+
+	if err = scanner.Err(); err != nil {
+		return nil, fmt.Errorf("Scanner error: %w", err)
+	}
+
+	return tasks, nil
 }
 
 func (fs FileStorage) Get(id uint) (Task, error) {
-	return Task{}, nil
+	tasks, err := fs.GetAll()
+	if err != nil {
+		return Task{}, err
+	}
+
+	for _, val := range tasks {
+		if val.Id == id {
+			return val, nil
+		}
+	}
+
+	return Task{Id: 0}, nil
 }

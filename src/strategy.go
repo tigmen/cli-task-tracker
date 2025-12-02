@@ -33,14 +33,12 @@ type Stratrgy interface {
 }
 
 type Command_add struct {
-	path        string
+	storage     Storage
 	description string
 }
 
 func (c Command_add) Execute(context Context) (string, error) {
-	var storage Storage = FileStorage{path: c.path}
-
-	id, err := storage.Add(Task{Desctiption: c.description, Status: TODO,
+	id, err := c.storage.Add(Task{Desctiption: c.description, Status: TODO,
 		CreatedAt: time.Now().Unix(), UpdatedAt: time.Now().Unix()})
 	if err != nil {
 	}
