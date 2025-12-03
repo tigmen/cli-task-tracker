@@ -73,7 +73,7 @@ func (fs FileStorage) Add(task Task) (uint, error) {
 }
 
 func (fs FileStorage) rewrite(tasks []Task) error {
-	file, err := os.OpenFile(fs.path, os.O_WRONLY, os.ModePerm)
+	file, err := os.OpenFile(fs.path, os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("Failed to open storage-file: %w", err)
 	}
@@ -87,6 +87,7 @@ func (fs FileStorage) rewrite(tasks []Task) error {
 	writer := bufio.NewWriter(file)
 
 	for _, val := range tasks {
+		log.Println(val)
 		writer.WriteString(fmt.Sprintf("%d %s %d %d %d\n", val.Id, val.Desctiption, val.Status,
 			val.CreatedAt, val.UpdatedAt))
 	}
@@ -142,13 +143,18 @@ func (fs FileStorage) Delete(id uint) (uint, error) {
 		return 0, err
 	}
 
+	new_tasks := make([]Task, len(tasks))
+	j := 0
+
 	for i := 0; i < len(tasks); i++ {
 		if tasks[i].Id == id {
 			continue
 		}
+		new_tasks[j] = tasks[i]
+		j++
 	}
 
-	err = fs.rewrite(tasks)
+	err = fs.rewrite(new_tasks[:j])
 	if err != nil {
 		return 0, err
 	}
