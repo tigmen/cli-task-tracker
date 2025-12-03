@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -37,10 +38,16 @@ func (fs FileStorage) Add(task Task) (uint, error) {
 	var id uint
 
 	for scanner.Scan() {
-		_, err = fmt.Sscan(scanner.Text(), &id)
+		line := scanner.Bytes()
+
+		var tmp Task
+
+		err = json.Unmarshal(line, &tmp)
 		if err != nil {
-			return 0, fmt.Errorf("Error getting id from scanner.Text(): %w", err)
+			return 0, fmt.Errorf("Failed read json: %w", err)
 		}
+
+		id = tmp.Id + 1
 	}
 
 	if err = scanner.Err(); err != nil {
@@ -59,12 +66,16 @@ func (fs FileStorage) Add(task Task) (uint, error) {
 		task.UpdatedAt = time.Now().Unix()
 	}
 
-	if task.Id != 0 {
-		id = task.Id
+	if task.Id == 0 {
+		task.Id = id
 	}
-	id++
 
-	_, err = fmt.Fprintf(file, "%d %s %d %d %d\n", id, task.Desctiption, task.Status, task.CreatedAt, task.UpdatedAt)
+	out, err := json.Marshal(task)
+	if err != nil {
+		return 0, fmt.Errorf("Failed json: %w", err)
+	}
+
+	_, err = fmt.Fprintln(file, string(out))
 	if err != nil {
 		return 0, fmt.Errorf("Error writing new task: %w", err)
 	}
@@ -88,8 +99,16 @@ func (fs FileStorage) rewrite(tasks []Task) error {
 
 	for _, val := range tasks {
 		log.Println(val)
-		writer.WriteString(fmt.Sprintf("%d %s %d %d %d\n", val.Id, val.Desctiption, val.Status,
-			val.CreatedAt, val.UpdatedAt))
+
+		out, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Errorf("Failed json: %w", err)
+		}
+
+		_, err = fmt.Fprintln(writer, string(out))
+		if err != nil {
+			return fmt.Errorf("Error rewriting task: %w", err)
+		}
 	}
 
 	err = writer.Flush()
@@ -179,10 +198,14 @@ func (fs FileStorage) GetAll() ([]Task, error) {
 	tasks := make([]Task, 0)
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		tmp := Task{}
-		fmt.Sscanf(line, "%d %s %d %d %d", &tmp.Id, &tmp.Desctiption, &tmp.Status,
-			&tmp.CreatedAt, &tmp.UpdatedAt)
+		line := scanner.Bytes()
+
+		var tmp Task
+
+		err = json.Unmarshal(line, &tmp)
+		if err != nil {
+			return nil, fmt.Errorf("Failed read json: %w", err)
+		}
 
 		tasks = append(tasks, tmp)
 	}
