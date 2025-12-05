@@ -90,8 +90,18 @@ type Command_list struct {
 }
 
 func (c Command_list) Execute() (string, error) {
+	tasks, err := c.storage.GetAll()
+	if err != nil {
+		return "", fmt.Errorf("Failed Command_list: %w", err)
+	}
 
-	return fmt.Sprintf(""), nil
+	var out string
+
+	for _, val := range tasks {
+		out += fmt.Sprintf("id: %d, description: %s, created_at: %s, updated_at: %s\n", val.Id, val.Desctiption, time.Unix(val.CreatedAt, 0), time.Unix(val.UpdatedAt, 0))
+	}
+
+	return out, nil
 }
 
 func (c Command_list) Init(args []string) error {
@@ -102,7 +112,7 @@ func (c Command_list) Init(args []string) error {
 func NewCommandList() *Command_list {
 	cmd := &Command_list{
 		Command: Command{
-			flagset: flag.NewFlagSet("add", flag.ContinueOnError),
+			flagset: flag.NewFlagSet("list", flag.ContinueOnError),
 		},
 	}
 

@@ -27,6 +27,7 @@ func main() {
 
 	cmds := []Strategy{
 		NewCommandAdd(),
+		NewCommandList(),
 	}
 
 	subcommand := os.Args[1]
