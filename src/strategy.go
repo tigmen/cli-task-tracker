@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"strconv"
 	"time"
 )
 
@@ -44,9 +44,17 @@ func (c Command_add) Execute() (string, error) {
 }
 
 func (c *Command_add) Init(args []string) error {
-	c.flagset.Parse(args)
-	c.description = c.flagset.Arg(0)
-	log.Println(c.flagset.Args())
+	err := c.flagset.Parse(args)
+	if err != nil {
+		return fmt.Errorf("Failed parse flagset: %w", err)
+	}
+
+	args = c.flagset.Args()
+	if len(args) < 1 {
+		return fmt.Errorf("Need 1 args: description")
+	}
+
+	c.description = args[0]
 	return nil
 }
 
@@ -62,31 +70,197 @@ func NewCommandAdd() *Command_add {
 
 type Command_update struct {
 	Command
-	id uint
+	description string
+	id          uint
+}
+
+func NewCommandUpdate() *Command_update {
+	cmd := &Command_update{
+		Command: Command{
+			flagset: flag.NewFlagSet("update", flag.ContinueOnError),
+		},
+	}
+
+	return cmd
+}
+
+func (c *Command_update) Init(args []string) error {
+	err := c.flagset.Parse(args)
+	if err != nil {
+		return fmt.Errorf("Failed parse flagset: %w", err)
+	}
+
+	args = c.flagset.Args()
+	if len(args) < 2 {
+		return fmt.Errorf("Need 2 args: id and new description")
+	}
+
+	id, err := strconv.ParseUint(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("Failed parse uint id from %s: %w", args[0], err)
+	}
+
+	c.id = uint(id)
+	c.description = args[1]
+
+	return nil
 }
 
 func (c Command_update) Execute() (string, error) {
-	return fmt.Sprintf(""), nil
+	_, err := c.storage.Update(c.id, Task{Desctiption: c.description})
+	if err != nil {
+		return "", fmt.Errorf("Failed to execute command_update: %w", err)
+	}
+
+	return "", nil
 }
 
 type Command_delete struct {
 	Command
+	id uint
+}
+
+func NewCommandDelete() *Command_delete {
+	cmd := &Command_delete{
+		Command: Command{
+			flagset: flag.NewFlagSet("delete", flag.ContinueOnError),
+		},
+	}
+
+	return cmd
+}
+
+func (c *Command_delete) Init(args []string) error {
+	err := c.flagset.Parse(args)
+	if err != nil {
+		return fmt.Errorf("Failed parse flagset: %w", err)
+	}
+
+	args = c.flagset.Args()
+	if len(args) < 1 {
+		return fmt.Errorf("Need 1 args: id")
+	}
+
+	id, err := strconv.ParseUint(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("Failed parse uint id from %s: %w", args[0], err)
+	}
+
+	c.id = uint(id)
+
+	return nil
 }
 
 func (c Command_delete) Execute() (string, error) {
-	return fmt.Sprintf(""), nil
+	_, err := c.storage.Delete(c.id)
+	if err != nil {
+		return "", fmt.Errorf("Failed to execute command_delete: %w", err)
+	}
+
+	return "", nil
 }
 
 type Command_mark struct {
 	Command
+	id   uint
+	mark uint
+}
+
+func NewCommandMark() *Command_mark {
+	cmd := &Command_mark{
+		Command: Command{
+			flagset: flag.NewFlagSet("mark", flag.ContinueOnError),
+		},
+	}
+
+	return cmd
+}
+
+func (c *Command_mark) Init(args []string) error {
+	c.flagset.Parse(args)
+	if len(args) < 2 {
+		return fmt.Errorf("Need 2 args: id, mark")
+	}
+
+	id, err := strconv.ParseUint(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("Failed parse uint id from %s: %w", args[0], err)
+	}
+
+	c.id = uint(id)
+
+	switch args[1] {
+	case "todo":
+		c.mark = TODO
+	case "inprogress":
+		c.mark = INPROGRESS
+	case "done":
+		c.mark = DONE
+	default:
+		return fmt.Errorf("No such mark: %s", args[1])
+	}
+
+	return nil
 }
 
 func (c Command_mark) Execute() (string, error) {
-	return fmt.Sprintf(""), nil
+	_, err := c.storage.Update(c.id, Task{Status: c.mark})
+	if err != nil {
+		return "", fmt.Errorf("Failed to execute command_mark: %w", err)
+	}
+
+	return "", nil
 }
 
 type Command_list struct {
 	Command
+	mark uint
+}
+
+func NewCommandList() *Command_list {
+	cmd := &Command_list{
+		Command: Command{
+			flagset: flag.NewFlagSet("list", flag.ContinueOnError),
+		},
+	}
+
+	return cmd
+}
+
+func (c *Command_list) Init(args []string) error {
+	mark := c.flagset.String("mark", "all", "Show tasks with mark")
+	err := c.flagset.Parse(args)
+	if err != nil {
+		return fmt.Errorf("Failed parse flagset: %w", err)
+	}
+
+	switch *mark {
+	case "all":
+		c.mark = ALL
+	case "todo":
+		c.mark = TODO
+	case "inprogress":
+		c.mark = INPROGRESS
+	case "done":
+		c.mark = DONE
+	default:
+		return fmt.Errorf("Failed to parse flagse: unknown mark")
+	}
+
+	return nil
+}
+
+func status(status uint) (string, error) {
+	switch status {
+	case TODO:
+		return "todo", nil
+	case INPROGRESS:
+		return "inprogress", nil
+	case DONE:
+		return "done", nil
+	}
+
+	return "", fmt.Errorf("Unknown status")
 }
 
 func (c Command_list) Execute() (string, error) {
@@ -98,23 +272,17 @@ func (c Command_list) Execute() (string, error) {
 	var out string
 
 	for _, val := range tasks {
-		out += fmt.Sprintf("id: %d, description: %s, created_at: %s, updated_at: %s\n", val.Id, val.Desctiption, time.Unix(val.CreatedAt, 0), time.Unix(val.UpdatedAt, 0))
+		if c.mark == ALL || c.mark == val.Status {
+			status, err := status(val.Status)
+			if err != nil {
+				return "", fmt.Errorf("Failed parse status: %w", err)
+			}
+
+			out += fmt.Sprintf("#Id: %d\t%s\nDescription: %s\nCreated: %s\nUpdated: %s\n",
+				val.Id, status, val.Desctiption,
+				time.Unix(val.CreatedAt, 0).Format(time.RFC850), time.Unix(val.UpdatedAt, 0).Format(time.RFC850))
+		}
 	}
 
 	return out, nil
-}
-
-func (c Command_list) Init(args []string) error {
-	c.flagset.Parse(args)
-	return nil
-}
-
-func NewCommandList() *Command_list {
-	cmd := &Command_list{
-		Command: Command{
-			flagset: flag.NewFlagSet("list", flag.ContinueOnError),
-		},
-	}
-
-	return cmd
 }

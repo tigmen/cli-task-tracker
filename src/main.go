@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	TODO = iota
+	ALL = iota
+	TODO
 	INPROGRESS
 	DONE
 )
@@ -28,6 +29,10 @@ func main() {
 	cmds := []Strategy{
 		NewCommandAdd(),
 		NewCommandList(),
+		NewCommandUpdate(),
+		NewCommandList(),
+		NewCommandDelete(),
+		NewCommandMark(),
 	}
 
 	subcommand := os.Args[1]

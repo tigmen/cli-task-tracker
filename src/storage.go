@@ -98,8 +98,6 @@ func (fs FileStorage) rewrite(tasks []Task) error {
 	writer := bufio.NewWriter(file)
 
 	for _, val := range tasks {
-		log.Println(val)
-
 		out, err := json.Marshal(val)
 		if err != nil {
 			return fmt.Errorf("Failed json: %w", err)
