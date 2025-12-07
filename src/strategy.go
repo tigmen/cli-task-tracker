@@ -228,7 +228,7 @@ func NewCommandList() *Command_list {
 }
 
 func (c *Command_list) Init(args []string) error {
-	mark := c.flagset.String("mark", "all", "Show tasks with mark")
+	mark := c.flagset.String("status", "all", "Show tasks with mark")
 	err := c.flagset.Parse(args)
 	if err != nil {
 		return fmt.Errorf("Failed parse flagset: %w", err)
